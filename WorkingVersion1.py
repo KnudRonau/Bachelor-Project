@@ -16,6 +16,7 @@ from langchain_community.embeddings.sentence_transformer import (
 from langchain_community.vectorstores import Chroma
 from langchain.chains.question_answering import load_qa_chain
 import re
+from langchain_core.output_parsers import StrOutputParser
 
 # pip install langchain, llama-cpp, sentence-transformers, gitpython, chromadb required
 
@@ -25,7 +26,6 @@ model_path="D:/LmStudio/Models/TheBloke/dolphin-2.6-mistral-7B-GGUF/dolphin-2.6-
 query = "In less than 100 words, describe what happens in the MainFrame class"
 
 """
-
 
 #method to load the repository
 def load_repo(_git_repo: str):
@@ -73,7 +73,7 @@ def load_repo_helper(_git_repo_url: str, _repo_counter: int):
 def load_local_repo(_repo_path: str):
     loader = GitLoader(
         repo_path=_repo_path,
-        file_filter=lambda file_path: file_path.endswith(".java"),
+        #file_filter=lambda file_path: file_path.endswith(".java"),
         branch="master",
     )
     java_repo = loader.load()
@@ -97,29 +97,84 @@ def load_llm(_model_path: str, _callback_manager: CallbackManager):
     )
     return llm
 
+#method to setup the LLM and DB
+def setup(_db: str, _llm: str):
+    try:
+        db = load_repo(_db)
+    except Exception as e:
+        print("Error loading the repository")
+        return    
+    local_llm = load_llm(_llm, CallbackManager([StreamingStdOutCallbackHandler()]))
+    global vector_database
+    vector_database = db
+    global llm
+    llm = local_llm
 
-#main method to run the program
+#return the response from the LLM
+def llm_reponse(_query: str):
+    if(vector_database != None and llm != None):
+        docs = vector_database.similarity_search(_query)
+        parser = StrOutputParser()
+
+        prompt = PromptTemplate(
+            template="You are a software engineering expert. Use the following pieces of context to answer the question at the end. Give an in depth and thorough answer to the question. If you don't know the answer, state that you don't know." + 
+                "Context: {context_str} Question: {question} Answer: ", 
+            input_variables=["context_str", "question"]
+        )
+
+        prompt_and_model = prompt | llm
+        response = prompt_and_model.invoke({'context_str': docs, 'question': _query})
+        return parser.invoke(response)
+    else:
+        return "The LLM and DB are not setup yet"
+
+"""
+    #main method to run the program
 def main():
-    callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
+        #callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
 
-    db = load_repo(input("Enter the git repository url: "))
+        #db = load_repo(input("Enter the git repository url: "))
 
-    llm = load_llm(input("Enter the model path: "), callback_manager)
+        #llm = load_llm(input("Enter the model path: "), callback_manager) 
 
-    chain = load_qa_chain(llm, chain_type="stuff", verbose=False, callback_manager=callback_manager)
+        """"""
+        chain = load_qa_chain(llm, chain_type="stuff", verbose=True, callback_manager=callback_manager)
 
-    chain.llm_chain.prompt.template
+        chain.llm_chain.prompt.template
 
-    #docs = db.similarity_search(query)
+        while True:
+            query = input("Enter a question regarding the repository: ")
+            if query == "exit":
+                break
+            else:
+                docs = db.similarity_search(query) 
+                chain.invoke({'question': query, 'input_documents': docs})
+                """"""
+        parser = StrOutputParser()
 
-    while True:
-        query = input("Enter a question regarding the repository: ")
-        if query == "exit":
-            break
-        else:
-            docs = db.similarity_search(query) 
-            chain.invoke({'question': query, 'input_documents': docs})
+        prompt = PromptTemplate(
+            template="You are a software engineering expert. Use the following pieces of context to answer the question at the end. Give an in depth and thorough answer to the question. If you don't know the answer, state that you don't know." + 
+                "Context: {context_str} Question: {question} Answer: ", 
+            input_variables=["context_str", "question"]
+        )
+
+        prompt_and_model = prompt | llm
+        
+        while True:
+            query = input("Enter a question regarding the repository: ")
+            if query == "exit":
+                break
+            else:
+                docs = db.similarity_search(query) 
+                response = prompt_and_model.invoke({'context_str': docs, 'question': query})
+                print(parser.invoke(response))
+                print('')
+
+        
 
 
 if __name__ == "__main__":
-    main()
+        main()
+
+        
+"""
