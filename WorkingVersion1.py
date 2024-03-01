@@ -28,7 +28,7 @@ query = "In less than 100 words, describe what happens in the MainFrame class"
 
 
 #method to load the repository
-def load_repo(_git_repo):
+def load_repo(_git_repo: str):
 
     pattern = r'^https'
     if re.match(pattern, _git_repo):
@@ -52,7 +52,7 @@ def load_repo(_git_repo):
 
 
 #helper method to load the repository of repo is an url
-def load_repo_helper(_git_repo_url, _repo_counter):
+def load_repo_helper(_git_repo_url: str, _repo_counter: int):
     repo_path="./example_data/test_repo" + str(_repo_counter) + "/"
     java_repo = None
     try:
@@ -70,18 +70,18 @@ def load_repo_helper(_git_repo_url, _repo_counter):
 
 
 #helper method to load the local repository
-def load_local_repo(_repo_path):
+def load_local_repo(_repo_path: str):
     loader = GitLoader(
         repo_path=_repo_path,
         file_filter=lambda file_path: file_path.endswith(".java"),
-        #branch="master",
+        branch="master",
     )
     java_repo = loader.load()
     return java_repo
 
 
 #method to load the model
-def load_llm(_model_path):
+def load_llm(_model_path: str, _callback_manager: CallbackManager):
     formatted_model_path = _model_path.replace("\\", "/")
     formatted_model_path = formatted_model_path.strip('"')
     print(formatted_model_path)
@@ -92,7 +92,7 @@ def load_llm(_model_path):
         n_gpu_layers=-1,
         n_batch=4096,
         n_ctx=8192,
-        #callback_manager=callback_manager,
+        callback_manager=_callback_manager,
         verbose=True,
     )
     return llm
@@ -104,7 +104,7 @@ def main():
 
     db = load_repo(input("Enter the git repository url: "))
 
-    llm = load_llm(input("Enter the model path: "))
+    llm = load_llm(input("Enter the model path: "), callback_manager)
 
     chain = load_qa_chain(llm, chain_type="stuff", verbose=False, callback_manager=callback_manager)
 
