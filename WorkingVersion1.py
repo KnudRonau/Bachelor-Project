@@ -10,6 +10,7 @@ from langchain_community.document_loaders import GitLoader
 from langchain.text_splitter import Language
 from langchain_community.document_loaders.parsers import LanguageParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.text_splitter import Language
 from langchain_community.embeddings.sentence_transformer import (
     SentenceTransformerEmbeddings,
 )
@@ -17,6 +18,7 @@ from langchain_community.vectorstores import Chroma
 from langchain.chains.question_answering import load_qa_chain
 import re
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.documents import Document
 
 # pip install langchain, llama-cpp, sentence-transformers, gitpython, chromadb required
 
@@ -73,7 +75,7 @@ def load_repo_helper(_git_repo_url: str, _repo_counter: int):
 def load_local_repo(_repo_path: str):
     loader = GitLoader(
         repo_path=_repo_path,
-        #file_filter=lambda file_path: file_path.endswith(".java"),
+        file_filter=lambda file_path: file_path.endswith(".java"),
         branch="master",
     )
     java_repo = loader.load()
