@@ -1,24 +1,17 @@
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
-from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from langchain_community.llms import LlamaCpp
-import shutil
-import os
-import sys
+from langchain_community.llms.llamacpp import LlamaCpp
+
 from langchain_community.document_loaders import GitLoader
-from langchain.text_splitter import Language
-from langchain_community.document_loaders.parsers import LanguageParser
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.text_splitter import Language
 from langchain_community.embeddings.sentence_transformer import (
     SentenceTransformerEmbeddings,
 )
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores.chroma import Chroma
 from langchain.chains.question_answering import load_qa_chain
 import re
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.documents import Document
 
 # pip install langchain, llama-cpp, sentence-transformers, gitpython, chromadb required
 
@@ -34,18 +27,160 @@ def load_repo(_git_repo: str):
 
     pattern = r'^https'
     if re.match(pattern, _git_repo):
-        java_repo = load_repo_helper(_git_repo, 1)
+        java_repo = load_online_repo(_git_repo, 1)
     else:
         java_repo = load_local_repo(_git_repo)
-    #java_repo = load_repo_helper(git_repo, 1)
 
     print(len(java_repo))
+    
+    coding_separators = [
+                "\nenum ",
+                "\ninterface ",
+                "\nnamespace ",
+                "\nimplements ",
+                "\ndelegate ",
+                "\nevent ",
+                # Split along class definitions
+                "\nclass ",
+                "\ndef ",
+                "\n\tdef ",
+                "\nobject ",
+                "\nstruct ",
+                "\nabstract ",
+                # Split along function definitions
+                "\nvoid ",
+                "\nint ",
+                "\nfloat ",
+                "\ndouble ",
+                "\nfunc ",
+                "\nvar ",
+                "\nconst ",
+                "\ntype ",
+                "\npublic ",
+                "\nprotected ",
+                "\nprivate ",
+                "\nstatic ",
+                "\ninternal ",
+                "\ncompanion ",
+                "\nfun ",
+                "\nval ",
+                "\nfunction ",
+                "\nlet ",
+                "\nfn ",
+                "\nreturn ",
+                # Split along control flow statements
+                "\nif ",
+                "\nfor ",
+                "\ndo ",
+                "\nwhile ",
+                "\nswitch ",
+                "\ncase ",
+                "\nwhen ",
+                "\nelse ",
+                "\ndefault ",
+                "\nbegin ",
+                "\nrescue ",
+                "\nunless ",
+                "\nloop ",
+                "\nmatch ",
+                "\ncontinue ",
+                "\nforeach ",
+                "\nbreak ",
+                "\ndo while ",
+                "\nassembly ",
+                # Split by exceptions
+                "\ntry ",
+                "\nthrow ",
+                "\nfinally ",
+                "\ncatch ",
+                # Split by the normal type of lines
+                "\n\n",
+                "\n",
+                " ",
+                "",
+                # PROTO
+                "\nmessage ",
+                "\nimport ",
+                "\nservice ",
+                "\nsyntax ",
+                "\noption ",
+                # RST
+                "\n=+\n",
+                "\n-+\n",
+                "\n\\*+\n",
+                "\n\n.. *\n\n",
+                # markdown
+                "\n#{1,6} ",
+                "```\n",
+                "\n\\*\\*\\*+\n",
+                "\n---+\n",
+                "\n___+\n",
+                # html
+                "<body",
+                "<div",
+                "<p",
+                "<br",
+                "<li",
+                "<h1",
+                "<h2",
+                "<h3",
+                "<h4",
+                "<h5",
+                "<h6",
+                "<span",
+                "<table",
+                "<tr",
+                "<td",
+                "<th",
+                "<ul",
+                "<ol",
+                "<header",
+                "<footer",
+                "<nav",
+                # Head
+                "<head",
+                "<style",
+                "<script",
+                "<meta",
+                "<title",
+                "",
+                # sol
+                "\npragma ",
+                "\nusing ",
+                "\ncontract ",
+                "\nlibrary ",
+                "\nconstructor ",
+                #cobol
+                "\nIDENTIFICATION DIVISION.",
+                "\nENVIRONMENT DIVISION.",
+                "\nDATA DIVISION.",
+                "\nPROCEDURE DIVISION.",
+                "\nWORKING-STORAGE SECTION.",
+                "\nLINKAGE SECTION.",
+                "\nFILE SECTION.",
+                "\nINPUT-OUTPUT SECTION.",
+                "\nOPEN ",
+                "\nCLOSE ",
+                "\nREAD ",
+                "\nWRITE ",
+                "\nIF ",
+                "\nELSE ",
+                "\nMOVE ",
+                "\nPERFORM ",
+                "\nUNTIL ",
+                "\nVARYING ",
+                "\nACCEPT ",
+                "\nDISPLAY ",
+                "\nSTOP RUN.",
 
-    java_splitter = RecursiveCharacterTextSplitter.from_language(
-        language=Language.JAVA, chunk_size=1000, chunk_overlap=200
+    ]
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=800, chunk_overlap=200, separators=coding_separators
+
     )
-    texts = java_splitter.split_documents(java_repo)
-    len(texts)
+    texts = text_splitter.split_documents(java_repo)
+    print(len(texts))
 
     embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -54,20 +189,19 @@ def load_repo(_git_repo: str):
 
 
 #helper method to load the repository of repo is an url
-def load_repo_helper(_git_repo_url: str, _repo_counter: int):
+def load_online_repo(_git_repo_url: str, _repo_counter: int):
     repo_path="./example_data/test_repo" + str(_repo_counter) + "/"
     java_repo = None
     try:
         loader = GitLoader(
             clone_url=_git_repo_url,
             repo_path=repo_path,
-            file_filter=lambda file_path: file_path.endswith(".java"),
             branch="master",
         )
         java_repo = loader.load()
     except ValueError as e:
         print("Another repository is already cloned at this path. Trying another path.")
-        return load_repo_helper(_git_repo_url, _repo_counter + 1)
+        return load_online_repo(_git_repo_url, _repo_counter + 1)
     return java_repo
 
 
@@ -75,7 +209,6 @@ def load_repo_helper(_git_repo_url: str, _repo_counter: int):
 def load_local_repo(_repo_path: str):
     loader = GitLoader(
         repo_path=_repo_path,
-        file_filter=lambda file_path: file_path.endswith(".java"),
         branch="master",
     )
     java_repo = loader.load()
@@ -96,16 +229,14 @@ def load_llm(_model_path: str, _callback_manager: CallbackManager):
         n_ctx=8192,
         callback_manager=_callback_manager,
         verbose=True,
+        temperature=0.1,
     )
     return llm
 
 #method to setup the LLM and DB
 def setup(_db: str, _llm: str):
-    try:
-        db = load_repo(_db)
-    except Exception as e:
-        print("Error loading the repository")
-        return    
+    db = load_repo(_db)
+    
     local_llm = load_llm(_llm, CallbackManager([StreamingStdOutCallbackHandler()]))
     global vector_database
     vector_database = db
@@ -123,10 +254,14 @@ def llm_reponse(_query: str):
                 "Context: {context_str} Question: {question} Answer: ", 
             input_variables=["context_str", "question"]
         )
+        print("\n\n")
+        print(docs[0])
+        print("\n\n")
 
-        prompt_and_model = prompt | llm
+
+        prompt_and_model = prompt | llm | parser
         response = prompt_and_model.invoke({'context_str': docs, 'question': _query})
-        return parser.invoke(response)
+        return response
     else:
         return "The LLM and DB are not setup yet"
 
@@ -139,7 +274,7 @@ def main():
 
         #llm = load_llm(input("Enter the model path: "), callback_manager) 
 
-        """"""
+        """"""""
         chain = load_qa_chain(llm, chain_type="stuff", verbose=True, callback_manager=callback_manager)
 
         chain.llm_chain.prompt.template
