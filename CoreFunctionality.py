@@ -6,20 +6,17 @@ from langchain_community.llms.llamacpp import LlamaCpp
 from langchain_community.document_loaders import GitLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings.sentence_transformer import (
-    SentenceTransformerEmbeddings,
+    SentenceTransformerEmbeddings
 )
 from langchain_community.vectorstores.chroma import Chroma
-from langchain.chains.question_answering import load_qa_chain
 import re
 from langchain_core.output_parsers import StrOutputParser
 
 # pip install langchain, llama-cpp, sentence-transformers, gitpython, chromadb required
 
 """
+Repository for example usage:
 git_repo_url= "https://github.com/KnudRonau/design-pattern-showcasing"
-model_path="D:/LmStudio/Models/TheBloke/dolphin-2.6-mistral-7B-GGUF/dolphin-2.6-mistral-7b.Q6_K.gguf"
-query = "In less than 100 words, describe what happens in the MainFrame class"
-
 """
 
 #method to load the repository
@@ -30,8 +27,6 @@ def load_repo(_git_repo: str):
         java_repo = load_online_repo(_git_repo, 1)
     else:
         java_repo = load_local_repo(_git_repo)
-
-    print(len(java_repo))
     
     coding_separators = [
                 "\nenum ",
@@ -176,11 +171,9 @@ def load_repo(_git_repo: str):
     ]
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=800, chunk_overlap=200, separators=coding_separators
-
+        chunk_size=1000, chunk_overlap=200, separators=coding_separators
     )
     texts = text_splitter.split_documents(java_repo)
-    print(len(texts))
 
     embedding_function = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
@@ -199,7 +192,7 @@ def load_online_repo(_git_repo_url: str, _repo_counter: int):
             branch="master",
         )
         java_repo = loader.load()
-    except ValueError as e:
+    except ValueError:
         print("Another repository is already cloned at this path. Trying another path.")
         return load_online_repo(_git_repo_url, _repo_counter + 1)
     return java_repo
@@ -216,7 +209,7 @@ def load_local_repo(_repo_path: str):
 
 
 #method to load the model
-def load_llm(_model_path: str, _callback_manager: CallbackManager):
+def load_llm(_model_path: str, _callback_manager: CallbackManager, _temperature: float):
     formatted_model_path = _model_path.replace("\\", "/")
     formatted_model_path = formatted_model_path.strip('"')
     print(formatted_model_path)
@@ -225,28 +218,44 @@ def load_llm(_model_path: str, _callback_manager: CallbackManager):
     llm = LlamaCpp(
         model_path=formatted_model_path,
         n_gpu_layers=-1,
-        n_batch=4096,
-        n_ctx=8192,
+        # larger n_batch and n_ctx provide better results but are slower
+        n_batch=2048,
+        n_ctx=4096,
         callback_manager=_callback_manager,
         verbose=True,
-        temperature=0.1,
+        temperature=_temperature,
     )
     return llm
 
+
 #method to setup the LLM and DB
-def setup(_db: str, _llm: str):
-    db = load_repo(_db)
-    
-    local_llm = load_llm(_llm, CallbackManager([StreamingStdOutCallbackHandler()]))
+def setup(_db: str, _llm: str, _temperature: float):
+    try:
+        db = load_repo(_db)
+    except:
+        error_message = "The repository could not be loaded, please try again."
+        print(error_message)
+        db = None
+        return error_message
+    try:
+        local_llm = load_llm(_llm, CallbackManager([StreamingStdOutCallbackHandler()]), _temperature)
+    except:
+        error_message = "The LLM could not be loaded, please try again."
+        print(error_message)
+        local_llm = None
+        return error_message
+
     global vector_database
     vector_database = db
     global llm
     llm = local_llm
+    return "The repository and LLM have been setup successfully"
+
 
 #return the response from the LLM
 def llm_reponse(_query: str):
     if(vector_database != None and llm != None):
-        docs = vector_database.similarity_search(_query)
+        docs = vector_database.similarity_search(_query, k=4)
         parser = StrOutputParser()
 
         prompt = PromptTemplate(
@@ -254,64 +263,9 @@ def llm_reponse(_query: str):
                 "Context: {context_str} Question: {question} Answer: ", 
             input_variables=["context_str", "question"]
         )
-        print("\n\n")
-        print(docs[0])
-        print("\n\n")
-
-
+      
         prompt_and_model = prompt | llm | parser
         response = prompt_and_model.invoke({'context_str': docs, 'question': _query})
         return response
     else:
         return "The LLM and DB are not setup yet"
-
-"""
-    #main method to run the program
-def main():
-        #callback_manager = CallbackManager([StreamingStdOutCallbackHandler()])
-
-        #db = load_repo(input("Enter the git repository url: "))
-
-        #llm = load_llm(input("Enter the model path: "), callback_manager) 
-
-        """"""""
-        chain = load_qa_chain(llm, chain_type="stuff", verbose=True, callback_manager=callback_manager)
-
-        chain.llm_chain.prompt.template
-
-        while True:
-            query = input("Enter a question regarding the repository: ")
-            if query == "exit":
-                break
-            else:
-                docs = db.similarity_search(query) 
-                chain.invoke({'question': query, 'input_documents': docs})
-                """"""
-        parser = StrOutputParser()
-
-        prompt = PromptTemplate(
-            template="You are a software engineering expert. Use the following pieces of context to answer the question at the end. Give an in depth and thorough answer to the question. If you don't know the answer, state that you don't know." + 
-                "Context: {context_str} Question: {question} Answer: ", 
-            input_variables=["context_str", "question"]
-        )
-
-        prompt_and_model = prompt | llm
-        
-        while True:
-            query = input("Enter a question regarding the repository: ")
-            if query == "exit":
-                break
-            else:
-                docs = db.similarity_search(query) 
-                response = prompt_and_model.invoke({'context_str': docs, 'question': query})
-                print(parser.invoke(response))
-                print('')
-
-        
-
-
-if __name__ == "__main__":
-        main()
-
-        
-"""
