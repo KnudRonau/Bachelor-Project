@@ -8,7 +8,7 @@ class GUI:
 
     def __init__(self, master):
         self.master = master
-        master.title("Interactive Chat and File Locator")
+        master.title("SPAC-B")
         
         # Chat Window
         self.chat_frame = tk.Frame(master)
@@ -60,8 +60,6 @@ class GUI:
             self.chat_log.insert(tk.END, f"Trying to load repository and LLM...\n")
             self.chat_log.insert(tk.END, cf.setup(self.url_input.get(), file_path, self.temperature)+"\n")
             
-
-
 
 def main():
     root = tk.Tk()

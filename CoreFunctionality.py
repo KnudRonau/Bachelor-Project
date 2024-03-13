@@ -230,24 +230,22 @@ def load_llm(_model_path: str, _callback_manager: CallbackManager, _temperature:
 
 #method to setup the LLM and DB
 def setup(_db: str, _llm: str, _temperature: float):
+    global vector_database; vector_database = None
+    global llm; llm = None
     try:
         db = load_repo(_db)
     except:
         error_message = "The repository could not be loaded, please try again."
         print(error_message)
-        db = None
         return error_message
     try:
         local_llm = load_llm(_llm, CallbackManager([StreamingStdOutCallbackHandler()]), _temperature)
     except:
         error_message = "The LLM could not be loaded, please try again."
         print(error_message)
-        local_llm = None
         return error_message
-
-    global vector_database
+    
     vector_database = db
-    global llm
     llm = local_llm
     return "The repository and LLM have been setup successfully"
 
